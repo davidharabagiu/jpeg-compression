@@ -2,6 +2,7 @@
 #include "JPEGCompress.h"
 
 #include <iostream>
+#include <fstream>
 
 namespace Smecherie
 {
@@ -141,7 +142,7 @@ namespace Smecherie
 				ncb /= qc[u][v];
 				ncr /= qc[u][v];
 
-				std::cout << (int)ny << std::endl;
+				//std::cout << (int)ny << std::endl;
 
 				dst(u, v) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
 			}
@@ -166,7 +167,7 @@ namespace Smecherie
 		return dst;
 	}
 
-	static std::vector<std::pair<int, int>> rle(const Mat_<Vec3i>& src)
+	/*static std::vector<Vec3i> zigzag(const Mat_<Vec3i>& src)
 	{
 		Vec3i nx;
 		int y, cb, cr, ny, ncb, ncr;
@@ -175,9 +176,62 @@ namespace Smecherie
 			for (int j = 0; j <= i; ++j)
 			{
 				nx = src((i % 2 == 1) ? j : i - j, (i % 2 == 1) ? i - j : j);
-
+				
 			}
 		}
+	}*/
+
+	static std::vector<Vec3i> Zigzag(const Mat_<Vec3i>& src)
+	{
+		std::vector<Vec2i> zz{};
+
+		for (int i = 0; i < 8; ++i)
+		{
+			for (int j = 0; j <= i; ++j)
+			{
+				int r = (i % 2 == 1) ? j : i - j;
+				int c = (i % 2 == 1) ? i - j : j;
+
+				zz.push_back({ r, c });
+			}
+		}
+		for (int i = 1; i < 8; ++i)
+		{
+			for (int j = 0; j < 8 - i; ++j)
+			{
+				int r = (i % 2 == 1) ? 8 - j - 1 : i + j;
+				int c = (i % 2 == 1) ? i + j : 8 - j - 1;
+
+				zz.push_back({ r, c });
+			}
+		}
+
+		std::vector<Vec3i> res{};
+		for (int i = 0; i < 16; ++i)
+		{
+			res.push_back(src(zz[i][0], zz[i][1]));
+		}
+
+		return res;
+	}
+
+	void WriteJPEG(std::vector<std::vector<Vec3i>> data, char *path)
+	{
+		std::ofstream fout(path, std::ios::binary);
+
+		for (int i = 0; i < data.size(); ++i)
+		{
+			auto& p = data[i];
+			for (int k = 0; k < p.size(); ++k)
+			{
+				Vec3i px = p[k];
+				Vec3b px_packed{ (uchar)px[0], (uchar)px[1], (uchar)px[2] };
+				std::cout << sizeof(px_packed);
+				fout.write(reinterpret_cast<char *>(&px_packed), sizeof(px_packed));
+			}
+		}
+
+		fout.close();
 	}
 
 	void JPEGCompress(Mat_<Vec3b>& img, char *path)
@@ -186,6 +240,17 @@ namespace Smecherie
 		auto partitions = Partition(img_ycbcr);
 		auto partitions_quantized = Quantize(partitions);
 
+		std::vector<std::vector<Vec3i>> data{};
+		for (int i = 0; i < partitions_quantized.size(); ++i)
+		{
+			auto& row = partitions_quantized[i];
+			for (int j = 0; j < row.size(); ++j)
+			{
+				data.push_back(Zigzag(row[j]));
+			}
+		}
+
+		WriteJPEG(data, "test.bin");
 	}
 }
 

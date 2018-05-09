@@ -396,7 +396,6 @@ void testJPEGCompress()
 		return;
 	Mat_<Vec3b> img = imread(fname);
 	Smecherie::JPEGCompress(img, "kkt");
-	waitKey(0);
 }
 
 int main()
