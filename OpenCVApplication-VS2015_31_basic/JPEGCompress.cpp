@@ -1,6 +1,10 @@
+//
+// File: JPEGCompress.cpp
+// Author: David Harabagiu
+//
+
 #include "stdafx.h"
 #include "JPEGCompress.h"
-
 #include <iostream>
 #include <fstream>
 
@@ -45,10 +49,6 @@ namespace Smecherie
 				new_val[0] = MIN(255, MAX(0, (0.299 * (int)old_val[2]) + (0.587 * (int)old_val[1]) + (0.114 * (int)old_val[0])));
 				new_val[1] = MIN(255, MAX(0, 128 - (0.168736 * (int)old_val[2]) - (0.331264 * (int)old_val[1]) + (0.5 * (int)old_val[0])));
 				new_val[2] = MIN(255, MAX(0, 128 + (0.5 * (int)old_val[2]) - (0.418688 * (int)old_val[1]) - (0.081312 * (int)old_val[0])));
-
-				// downsample chrominance
-				new_val[1] = 2 * (new_val[1] / 2);
-				new_val[2] = 2 * (new_val[2] / 2);
 
 				img_ycbcr(i, j) = new_val;
 			}

@@ -1,3 +1,8 @@
+//
+// File: JPEGCompress.h
+// Author: David Harabagiu
+//
+
 #ifndef _JPEGCompress_H_
 #define _JPEGCompress_H_
 
