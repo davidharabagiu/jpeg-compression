@@ -186,7 +186,7 @@ namespace Smecherie
 				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
 				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
 
-				dst(x, y) = Vec3i{ (int)ny + 128, (int)ncb, (int)ncr };
+				dst(y, x) = Vec3i{ (int)ny + 128, (int)ncb, (int)ncr };
 			}
 		}
 
@@ -247,7 +247,7 @@ namespace Smecherie
 		}
 
 		std::vector<Vec3i> res{};
-		for (int i = 0; i < 16; ++i)
+		for (int i = 0; i < 32; ++i)
 		{
 			res.push_back(src(zz[i][0], zz[i][1]));
 		}
@@ -281,7 +281,7 @@ namespace Smecherie
 		}
 
 		Mat_<Vec3i> res(8, 8, { 0, 0, 0 });
-		for (int i = 0; i < 16; ++i)
+		for (int i = 0; i < 32; ++i)
 		{
 			res(zz[i][0], zz[i][1]) = src[i];
 		}
@@ -323,7 +323,7 @@ namespace Smecherie
 		for (int i = 0; i < partitions; ++i)
 		{
 			data.push_back(std::vector<Vec3i>{});
-			for (int j = 0; j < 16; ++j)
+			for (int j = 0; j < 32; ++j)
 			{
 				Vec3b px;
 				fin.read(reinterpret_cast<char *>(&px), sizeof(px));
@@ -404,7 +404,7 @@ namespace Smecherie
 
 		auto img = YCbCr_to_RGB(img_ycbcr);
 
-		imshow("doamne apara si pazeste", img);
+		imwrite("bazat.jpg", img);
 		waitKey(0);
 	}
 }
