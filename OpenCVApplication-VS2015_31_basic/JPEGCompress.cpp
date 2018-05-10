@@ -28,6 +28,8 @@ namespace Smecherie
 		{ 99, 99, 99, 99, 99, 99, 99, 99 }
 	};
 
+	static const int QUALITY = 32;
+
 	static Mat_<Vec3i> RGB_to_YCbCr(const Mat_<Vec3b>& img_rgb)
 	{
 		Mat_<Vec3i> img_ycbcr(img_rgb.rows, img_rgb.cols);
@@ -78,144 +80,95 @@ namespace Smecherie
 		return img_rgb;
 	}
 
-	static std::vector<std::vector<Mat_<Vec3i>>> Partition(const Mat_<Vec3i>& img)
+	static Mat_<Vec3i> ProcessImg(const Mat_<Vec3i>& src)
 	{
-		int pr = img.rows / 8;
-		int pc = img.cols / 8;
-		if (img.rows % 8 != 0)
-			++pr;
-		if (img.cols % 8 != 0)
-			++pc;
+		Mat_<Vec3i> dst(src.rows, src.cols);
 
-		std::vector<std::vector<Mat_<Vec3i>>> partitions{};
-		for (int pi = 0; pi < pr; ++pi)
+		double ny, ncb, ncr, ci, cj;
+		for (int br = 0; br < src.rows; br += 8)
 		{
-			partitions.push_back(std::vector<Mat_<Vec3i>>{});
-			for (int pj = 0; pj < pc; ++pj)
+			for (int bc = 0; bc < src.cols; bc += 8)
 			{
-				partitions[pi].push_back(Mat_<Vec3i>(8, 8, Vec3i{}));
 				for (int i = 0; i < 8; ++i)
 				{
 					for (int j = 0; j < 8; ++j)
 					{
-						if (i + pi * 8 >= img.rows || j + pj * 8 >= img.cols)
+						ny = ncb = ncr = 0.0;
+						for (int x = 0; x < 8; ++x)
 						{
-							continue;
+							for (int y = 0; y < 8; ++y)
+							{
+								ny += (src(br + y, bc + x)[0] - 128) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+								ncb += (src(br + y, bc + x)[1]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+								ncr += (src(br + y, bc + x)[2]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+							}
 						}
-						partitions[pi][pj](i, j) = img(i + pi * 8,j + pj * 8);
+
+						ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
+						cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
+
+						ny *= ci * cj;
+						ncb *= ci * cj;
+						ncr *= ci * cj;
+
+						ny /= ql[i][j];
+						ncb /= qc[i][j];
+						ncr /= qc[i][j];
+
+						ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
+						ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
+						ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
+
+						dst(br + i, bc + j) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
 					}
 				}
-			}
-		}
-
-		return partitions;
-	}
-
-	static Mat_<Vec3i> dct(const Mat_<Vec3i>& src)
-	{
-		Mat_<Vec3i> dst(src.rows, src.cols);
-		double ny, ncb, ncr, ci, cj;
-
-		for (int i = 0; i < src.rows; ++i)
-		{
-			for (int j = 0; j < src.cols; ++j)
-			{
-				ny = ncb = ncr = 0.0;
-				for (int x = 0; x < 8; ++x)
-				{
-					for (int y = 0; y < 8; ++y)
-					{
-						ny += (src(y, x)[0] - 128) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
-						ncb += (src(y, x)[1]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
-						ncr += (src(y, x)[2]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
-					}
-				}
-				
-				ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
-				cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
-
-				ny *= ci * cj;
-				ncb *= ci * cj;
-				ncr *= ci * cj;
-
-				ny /= ql[i][j];
-				ncb /= qc[i][j];
-				ncr /= qc[i][j];
-
-				ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
-				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
-				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
-
-				dst(i, j) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
 			}
 		}
 
 		return dst;
 	}
 
-	static Mat_<Vec3i> idct(const Mat_<Vec3i>& src)
+	static Mat_<Vec3i> ProcessImg2(const Mat_<Vec3i>& src)
 	{
 		const double alpha0 = 1 / sqrt(2.0);
 
 		Mat_<Vec3i> dst(src.rows, src.cols);
 		double ny, ncb, ncr, ci, cj, cy, ccb, ccr;
 
-		for (int x = 0; x < src.rows; ++x)
+		for (int br = 0; br < src.rows; br += 8)
 		{
-			for (int y = 0; y < src.cols; ++y)
+			for (int bc = 0; bc < src.cols; bc += 8)
 			{
-				ny = ncb = ncr = 0.0;
-				for (int i = 0; i < 8; ++i)
+				for (int x = 0; x < 8; ++x)
 				{
-					for (int j = 0; j < 8; ++j)
+					for (int y = 0; y < 8; ++y)
 					{
-						ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
-						cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
+						ny = ncb = ncr = 0.0;
+						for (int i = 0; i < 8; ++i)
+						{
+							for (int j = 0; j < 8; ++j)
+							{
+								ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
+								cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
 
-						cy = src(i, j)[0] * ql[i][j];
-						ccb = src(i, j)[1] * qc[i][j];
-						ccr = src(i, j)[2] * qc[i][j];
+								cy = src(br + i, bc + j)[0] * ql[i][j];
+								ccb = src(br + i, bc + j)[1] * qc[i][j];
+								ccr = src(br + i, bc + j)[2] * qc[i][j];
 
-						ny += ci * cj * cy * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
-						ncb += ci * cj * ccb * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
-						ncr += ci * cj * ccr * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+								ny += ci * cj * cy * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+								ncb += ci * cj * ccb * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+								ncr += ci * cj * ccr * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+							}
+						}
+
+						ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
+						ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
+						ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
+
+						dst(br + y, bc + x) = Vec3i{ (int)ny + 128, (int)ncb, (int)ncr };
 					}
 				}
-
-				ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
-				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
-				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
-
-				dst(y, x) = Vec3i{ (int)ny + 128, (int)ncb, (int)ncr };
 			}
-		}
-
-		return dst;
-	}
-
-	static std::vector<std::vector<Mat_<Vec3i>>> Quantize(const std::vector<std::vector<Mat_<Vec3i>>>& src)
-	{
-		std::vector<std::vector<Mat_<Vec3i>>> dst{};
-
-		for (int i = 0; i < src.size(); ++i)
-		{
-			dst.push_back(std::vector<Mat_<Vec3i>>{});
-			for (int j = 0; j < src[i].size(); ++j)
-			{
-				dst[i].push_back(dct(src[i][j]));
-			}
-		}
-
-		return dst;
-	}
-
-	static std::vector<Mat_<Vec3i>> Dequantize(const std::vector<Mat_<Vec3i>>& src)
-	{
-		std::vector<Mat_<Vec3i>> dst{};
-
-		for (int i = 0; i < src.size(); ++i)
-		{
-			dst.push_back(idct(src[i]));
 		}
 
 		return dst;
@@ -247,15 +200,21 @@ namespace Smecherie
 		}
 
 		std::vector<Vec3i> res{};
-		for (int i = 0; i < 32; ++i)
+		for (int br = 0; br < src.rows; br += 8)
 		{
-			res.push_back(src(zz[i][0], zz[i][1]));
+			for (int bc = 0; bc < src.cols; bc += 8)
+			{
+				for (int i = 0; i < QUALITY; ++i)
+				{
+					res.push_back(src(br + zz[i][0], bc + zz[i][1]));
+				}
+			}
 		}
 
 		return res;
 	}
 
-	static Mat_<Vec3i> Zigzag2(const std::vector<Vec3i>& src)
+	static Mat_<Vec3i> Zigzag2(const std::vector<Vec3i>& src, int rows, int cols)
 	{
 		std::vector<Vec2i> zz{};
 
@@ -280,132 +239,79 @@ namespace Smecherie
 			}
 		}
 
-		Mat_<Vec3i> res(8, 8, { 0, 0, 0 });
-		for (int i = 0; i < 32; ++i)
+		Mat_<Vec3i> res(rows, cols, { 0, 0, 0 });
+		for (int br = 0, k = 0; br < rows; br += 8)
 		{
-			res(zz[i][0], zz[i][1]) = src[i];
+			for (int bc = 0; bc < cols; bc += 8)
+			{
+				for (int i = 0; i < QUALITY; ++i, ++k)
+				{
+					res(br + zz[i][0], bc + zz[i][1]) = src[k];
+				}
+			}
 		}
 
 		return res;
 	}
 
-	void WriteJPEG(std::vector<std::vector<Vec3i>> data, int width, int height, char *path)
+	void WriteJPEG(std::vector<Vec3i> data, int rows, int cols, char *path)
 	{
 		std::ofstream fout(path, std::ios::binary);
 
-		fout.write(reinterpret_cast<char *>(&width), sizeof(width));
-		fout.write(reinterpret_cast<char *>(&height), sizeof(height));
+		fout.write(reinterpret_cast<char *>(&rows), sizeof(rows));
+		fout.write(reinterpret_cast<char *>(&cols), sizeof(cols));
 
 		for (int i = 0; i < data.size(); ++i)
 		{
-			auto& p = data[i];
-			for (int k = 0; k < p.size(); ++k)
-			{
-				Vec3i px = p[k];
-				Vec3b px_packed{ (uchar)px[0], (uchar)px[1], (uchar)px[2] };
-				fout.write(reinterpret_cast<char *>(&px_packed), sizeof(px_packed));
-			}
+			Vec3b px{ (uchar)data[i][0], (uchar)data[i][1], (uchar)data[i][2] };
+			fout.write(reinterpret_cast<char *>(&px), sizeof(px));
 		}
 
 		fout.close();
 	}
 
-	std::vector<std::vector<Vec3i>> ReadJPEG(char *path, int& width, int& height)
+	static std::vector<Vec3i> ReadJPEG(char *path, int& rows, int& cols)
 	{
 		std::ifstream fin(path, std::ios::binary);
 
-		fin.read(reinterpret_cast<char *>(&width), sizeof(width));
-		fin.read(reinterpret_cast<char *>(&height), sizeof(height));
+		fin.read(reinterpret_cast<char *>(&rows), sizeof(rows));
+		fin.read(reinterpret_cast<char *>(&cols), sizeof(cols));
 
-		std::vector<std::vector<Vec3i>> data{};
+		int partitions = (rows / 8) * (cols / 8);
+		std::vector<Vec3i> data(partitions * 64);
 
-		int partitions = (width / 8) * (height / 8);
-		for (int i = 0; i < partitions; ++i)
+		for (int i = 0, k = 0; i < partitions; ++i)
 		{
-			data.push_back(std::vector<Vec3i>{});
-			for (int j = 0; j < 32; ++j)
+			for (int j = 0; j < QUALITY; ++j, ++k)
 			{
 				Vec3b px;
 				fin.read(reinterpret_cast<char *>(&px), sizeof(px));
-				data[i].push_back({ (char)px[0], (char)px[1], (char)px[2] });
+				data[k] = { (char)px[0], (char)px[1], (char)px[2] };
 			}
 		}
 
 		return data;
 	}
 
-	template<typename T>
-	void print(Mat_<T>& img)
+	void JPEGCompress(char *src, char *dst)
 	{
-		for (int i = 0; i < img.rows; ++i)
-		{
-			for (int j = 0; j < img.cols; ++j)
-			{
-				std::cout << img(i, j) << " ";
-			}
-			std::cout << "\n";
-		}
-		std::cout.flush();
-
-		std::cin.get();
-		std::cin.get();
+		Mat_<Vec3b> img = imread(src), img_resize;
+		resize(img, img_resize, { (int)(std::ceil(img.cols / 8.0) * 8), (int)(std::ceil(img.rows / 8.0) * 8) });
+		auto img_ycbcr = RGB_to_YCbCr(img_resize);
+		auto temp = ProcessImg(img_ycbcr);
+		auto jpeg_data = Zigzag(temp);
+		WriteJPEG(jpeg_data, temp.rows, temp.cols, dst);
 	}
 
-	void JPEGCompress(Mat_<Vec3b>& img, char *path)
+	void JPEGDecompress(char *src, char *dst)
 	{
-		auto img_ycbcr = RGB_to_YCbCr(img);
-
-		auto partitions = Partition(img_ycbcr);
-
-		auto partitions_quantized = Quantize(partitions);
-
-		std::vector<std::vector<Vec3i>> data{};
-		for (int i = 0; i < partitions_quantized.size(); ++i)
-		{
-			auto& row = partitions_quantized[i];
-			for (int j = 0; j < row.size(); ++j)
-			{
-				data.push_back(Zigzag(row[j]));
-			}
-		}
-
-		WriteJPEG(data, partitions_quantized.size() * 8, partitions_quantized[0].size() * 8, "test.bin");
-
-		JPEGDecompress("test.bin");
-	}
-
-	void JPEGDecompress(char *path)
-	{
-		int width, height;
-		auto jpegData = ReadJPEG(path, width, height);
-
-		std::vector<Mat_<Vec3i>> partitions_quantized{};
-		for (auto part : jpegData)
-		{
-			partitions_quantized.push_back(Zigzag2(part));
-		}
-
-		auto partitions = Dequantize(partitions_quantized);
-		
-		Mat_<Vec3i> img_ycbcr(width, height);
-		for (int i = 0, k = 0; i < width / 8; ++i)
-		{
-			for (int j = 0; j < height / 8; ++j, ++k)
-			{
-				for (int _i = 0; _i < 8; ++_i)
-				{
-					for (int _j = 0; _j < 8; ++_j)
-					{
-						img_ycbcr(i * 8 + _i, j * 8 + _j) = partitions[k](_i, _j);
-					}
-				}
-			}
-		}
-
+		int rows, cols;
+		auto jpegData = ReadJPEG(src, rows, cols);
+		auto temp = Zigzag2(jpegData, rows, cols);
+		auto img_ycbcr = ProcessImg2(temp);
 		auto img = YCbCr_to_RGB(img_ycbcr);
 
-		imwrite("bazat.jpg", img);
-		waitKey(0);
+		imwrite(dst, img);
 	}
 }
 
