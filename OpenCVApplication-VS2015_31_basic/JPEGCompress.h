@@ -8,6 +8,7 @@
 namespace Smecherie
 {
 	void JPEGCompress(Mat_<Vec3b>& img, char *path);
+	void JPEGDecompress(char *path);
 }
 
 #endif

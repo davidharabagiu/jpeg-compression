@@ -142,7 +142,9 @@ namespace Smecherie
 				ncb /= qc[u][v];
 				ncr /= qc[u][v];
 
-				//std::cout << (int)ny << std::endl;
+				ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
+				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
+				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
 
 				dst(u, v) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
 			}
@@ -166,20 +168,6 @@ namespace Smecherie
 
 		return dst;
 	}
-
-	/*static std::vector<Vec3i> zigzag(const Mat_<Vec3i>& src)
-	{
-		Vec3i nx;
-		int y, cb, cr, ny, ncb, ncr;
-		for (int i = 0; i < 8; ++i)
-		{
-			for (int j = 0; j <= i; ++j)
-			{
-				nx = src((i % 2 == 1) ? j : i - j, (i % 2 == 1) ? i - j : j);
-				
-			}
-		}
-	}*/
 
 	static std::vector<Vec3i> Zigzag(const Mat_<Vec3i>& src)
 	{
@@ -215,9 +203,46 @@ namespace Smecherie
 		return res;
 	}
 
-	void WriteJPEG(std::vector<std::vector<Vec3i>> data, char *path)
+	static Mat_<Vec3i> Zigzag2(const std::vector<Vec3i>& src)
+	{
+		std::vector<Vec2i> zz{};
+
+		for (int i = 0; i < 8; ++i)
+		{
+			for (int j = 0; j <= i; ++j)
+			{
+				int r = (i % 2 == 1) ? j : i - j;
+				int c = (i % 2 == 1) ? i - j : j;
+
+				zz.push_back({ r, c });
+			}
+		}
+		for (int i = 1; i < 8; ++i)
+		{
+			for (int j = 0; j < 8 - i; ++j)
+			{
+				int r = (i % 2 == 1) ? 8 - j - 1 : i + j;
+				int c = (i % 2 == 1) ? i + j : 8 - j - 1;
+
+				zz.push_back({ r, c });
+			}
+		}
+
+		Mat_<Vec3i> res(8, 8, { 0, 0, 0 });
+		for (int i = 0; i < 16; ++i)
+		{
+			res(zz[i][0], zz[i][1]) = src[i];
+		}
+
+		return res;
+	}
+
+	void WriteJPEG(std::vector<std::vector<Vec3i>> data, int width, int height, char *path)
 	{
 		std::ofstream fout(path, std::ios::binary);
+
+		fout.write(reinterpret_cast<char *>(&width), sizeof(width));
+		fout.write(reinterpret_cast<char *>(&height), sizeof(height));
 
 		for (int i = 0; i < data.size(); ++i)
 		{
@@ -226,7 +251,6 @@ namespace Smecherie
 			{
 				Vec3i px = p[k];
 				Vec3b px_packed{ (uchar)px[0], (uchar)px[1], (uchar)px[2] };
-				std::cout << sizeof(px_packed);
 				fout.write(reinterpret_cast<char *>(&px_packed), sizeof(px_packed));
 			}
 		}
@@ -234,10 +258,68 @@ namespace Smecherie
 		fout.close();
 	}
 
+	std::vector<std::vector<Vec3i>> ReadJPEG(char *path)
+	{
+		std::ifstream fin(path, std::ios::binary);
+
+		int width, height;
+		fin.read(reinterpret_cast<char *>(&width), sizeof(width));
+		fin.read(reinterpret_cast<char *>(&height), sizeof(height));
+
+		std::vector<std::vector<Vec3i>> data{};
+
+		int partitions = (width / 8) * (height / 8);
+		for (int i = 0; i < partitions; ++i)
+		{
+			data.push_back(std::vector<Vec3i>{});
+			for (int j = 0; j < 16; ++j)
+			{
+				Vec3b px;
+				fin.read(reinterpret_cast<char *>(&px), sizeof(px));
+				data[i].push_back({ (char)px[0], (char)px[1], (char)px[2] });
+			}
+		}
+
+		return data;
+	}
+
+	template<typename T>
+	void print(Mat_<T>& img)
+	{
+		for (int i = 0; i < img.rows; ++i)
+		{
+			for (int j = 0; j < img.cols; ++j)
+			{
+				std::cout << img(i, j) << " ";
+			}
+			std::cout << "\n";
+		}
+		std::cout.flush();
+
+		std::cin.get();
+		std::cin.get();
+	}
+
 	void JPEGCompress(Mat_<Vec3b>& img, char *path)
 	{
-		auto img_ycbcr = RGB_to_YCbCr(img);
+		//auto img_ycbcr = RGB_to_YCbCr(img);
+
+		Vec3i imgdata[64] = {
+			{ 52, 52, 52 },{ 55, 55, 55 },{ 61, 61, 61 },{ 66, 66, 66 },{ 70, 70, 70 },{ 61, 61, 61 },{ 64, 64, 64 },{ 73, 73, 73 },
+			{ 63, 63, 63 },{ 59, 59, 59 },{ 55, 55, 55 },{ 90, 90, 90 },{ 109, 109, 109 },{ 85, 85, 85 },{ 69, 69, 69 },{ 72, 72, 72 },
+			{ 62, 62, 62 },{ 59, 59, 59 },{ 68, 68, 68 },{ 113, 113, 113 },{ 144, 144, 144 },{ 104, 104, 104 },{ 66, 66, 66 },{ 73, 73, 73 },
+			{ 63, 63, 63 },{ 58, 58, 58 },{ 71, 71, 71 },{ 122, 122, 122 },{ 154, 154, 154 },{ 106, 106, 106 },{ 70, 70, 70 },{ 69, 69, 69 },
+			{ 67, 67, 67 },{ 61, 61, 61 },{ 68, 68, 68 },{ 104, 104, 104 },{ 126, 126, 126 },{ 88, 88, 88 },{ 68, 68, 68 },{ 70, 70, 70 },
+			{ 79, 79, 79 },{ 65, 65, 65 },{ 60, 60, 60 },{ 70, 70, 70 },{ 77, 77, 77 },{ 68, 68, 68 },{ 58, 58, 58 },{ 75, 75, 75 },
+			{ 85, 85, 85 },{ 71, 71, 71 },{ 64, 64, 64 },{ 59, 59, 59 },{ 55, 55, 55 },{ 61, 61, 61 },{ 65, 65, 65 },{ 83, 83, 83 },
+			{ 87, 87, 87 },{ 79, 79, 79 },{ 69, 69, 69 },{ 68, 68, 68 },{ 65, 65, 65 },{ 76, 76, 76 },{ 78, 78, 78 },{ 94, 94, 94 }
+		};
+
+		Mat_<Vec3i> img_ycbcr(8, 8, imgdata);
+
+
 		auto partitions = Partition(img_ycbcr);
+
 		auto partitions_quantized = Quantize(partitions);
 
 		std::vector<std::vector<Vec3i>> data{};
@@ -250,7 +332,27 @@ namespace Smecherie
 			}
 		}
 
-		WriteJPEG(data, "test.bin");
+		WriteJPEG(data, partitions_quantized.size() * 8, partitions_quantized[0].size() * 8, "test.bin");
+
+		JPEGDecompress("test.bin");
+	}
+
+	void JPEGDecompress(char *path)
+	{
+		auto jpegData = ReadJPEG(path);
+
+		std::vector<Mat_<Vec3i>> partitions_quantized{};
+		for (auto part : jpegData)
+		{
+			partitions_quantized.push_back(Zigzag2(part));
+		}
+
+		for (auto part : partitions_quantized)
+		{
+			print(part);
+		}
+
+
 	}
 }
 
