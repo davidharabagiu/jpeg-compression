@@ -114,39 +114,79 @@ namespace Smecherie
 	static Mat_<Vec3i> dct(const Mat_<Vec3i>& src)
 	{
 		Mat_<Vec3i> dst(src.rows, src.cols);
-		double ny, ncb, ncr, alphau, alphav;
+		double ny, ncb, ncr, ci, cj;
 
-		for (int u = 0; u < src.rows; ++u)
+		for (int i = 0; i < src.rows; ++i)
 		{
-			for (int v = 0; v < src.cols; ++v)
+			for (int j = 0; j < src.cols; ++j)
 			{
 				ny = ncb = ncr = 0.0;
 				for (int x = 0; x < 8; ++x)
 				{
 					for (int y = 0; y < 8; ++y)
 					{
-						ny += (src(x, y)[0] - 128) * std::cos((PI / 8) * (x + 0.5) * u) * std::cos((PI / 8) * (y + 0.5) * v);
-						ncb += (src(x, y)[1] - 128) * std::cos((PI / 8) * (x + 0.5) * u) * std::cos((PI / 8) * (y + 0.5) * v);
-						ncr += (src(x, y)[2] - 128) * std::cos((PI / 8) * (x + 0.5) * u) * std::cos((PI / 8) * (y + 0.5) * v);
+						ny += (src(y, x)[0] - 128) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+						ncb += (src(y, x)[1]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+						ncr += (src(y, x)[2]) * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
 					}
 				}
 				
-				alphau = std::sqrt(((u == 0) ? 1.0 : 2.0) / 8);
-				alphav = std::sqrt(((v == 0) ? 1.0 : 2.0) / 8);
+				ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
+				cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
 
-				ny *= alphau * alphav;
-				ncb *= alphau * alphav;
-				ncr *= alphau * alphav;
+				ny *= ci * cj;
+				ncb *= ci * cj;
+				ncr *= ci * cj;
 
-				ny /= ql[u][v];
-				ncb /= qc[u][v];
-				ncr /= qc[u][v];
+				ny /= ql[i][j];
+				ncb /= qc[i][j];
+				ncr /= qc[i][j];
 
 				ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
 				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
 				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
 
-				dst(u, v) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
+				dst(i, j) = Vec3i{ (int)ny, (int)ncb, (int)ncr };
+			}
+		}
+
+		return dst;
+	}
+
+	static Mat_<Vec3i> idct(const Mat_<Vec3i>& src)
+	{
+		const double alpha0 = 1 / sqrt(2.0);
+
+		Mat_<Vec3i> dst(src.rows, src.cols);
+		double ny, ncb, ncr, ci, cj, cy, ccb, ccr;
+
+		for (int x = 0; x < src.rows; ++x)
+		{
+			for (int y = 0; y < src.cols; ++y)
+			{
+				ny = ncb = ncr = 0.0;
+				for (int i = 0; i < 8; ++i)
+				{
+					for (int j = 0; j < 8; ++j)
+					{
+						ci = std::sqrt(((i == 0) ? 1.0 : 2.0) / 8);
+						cj = std::sqrt(((j == 0) ? 1.0 : 2.0) / 8);
+
+						cy = src(i, j)[0] * ql[i][j];
+						ccb = src(i, j)[1] * qc[i][j];
+						ccr = src(i, j)[2] * qc[i][j];
+
+						ny += ci * cj * cy * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+						ncb += ci * cj * ccb * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+						ncr += ci * cj * ccr * std::cos(((2 * y + 1) * i * PI) / 16) * std::cos(((2 * x + 1) * j * PI) / 16);
+					}
+				}
+
+				ny = (ny - floor(ny) <= 0.5) ? floor(ny) : ceil(ny);
+				ncb = (ncb - floor(ncb) <= 0.5) ? floor(ncb) : ceil(ncb);
+				ncr = (ncr - floor(ncr) <= 0.5) ? floor(ncr) : ceil(ncr);
+
+				dst(x, y) = Vec3i{ (int)ny + 128, (int)ncb, (int)ncr };
 			}
 		}
 
@@ -164,6 +204,18 @@ namespace Smecherie
 			{
 				dst[i].push_back(dct(src[i][j]));
 			}
+		}
+
+		return dst;
+	}
+
+	static std::vector<Mat_<Vec3i>> Dequantize(const std::vector<Mat_<Vec3i>>& src)
+	{
+		std::vector<Mat_<Vec3i>> dst{};
+
+		for (int i = 0; i < src.size(); ++i)
+		{
+			dst.push_back(idct(src[i]));
 		}
 
 		return dst;
@@ -258,11 +310,10 @@ namespace Smecherie
 		fout.close();
 	}
 
-	std::vector<std::vector<Vec3i>> ReadJPEG(char *path)
+	std::vector<std::vector<Vec3i>> ReadJPEG(char *path, int& width, int& height)
 	{
 		std::ifstream fin(path, std::ios::binary);
 
-		int width, height;
 		fin.read(reinterpret_cast<char *>(&width), sizeof(width));
 		fin.read(reinterpret_cast<char *>(&height), sizeof(height));
 
@@ -302,21 +353,7 @@ namespace Smecherie
 
 	void JPEGCompress(Mat_<Vec3b>& img, char *path)
 	{
-		//auto img_ycbcr = RGB_to_YCbCr(img);
-
-		Vec3i imgdata[64] = {
-			{ 52, 52, 52 },{ 55, 55, 55 },{ 61, 61, 61 },{ 66, 66, 66 },{ 70, 70, 70 },{ 61, 61, 61 },{ 64, 64, 64 },{ 73, 73, 73 },
-			{ 63, 63, 63 },{ 59, 59, 59 },{ 55, 55, 55 },{ 90, 90, 90 },{ 109, 109, 109 },{ 85, 85, 85 },{ 69, 69, 69 },{ 72, 72, 72 },
-			{ 62, 62, 62 },{ 59, 59, 59 },{ 68, 68, 68 },{ 113, 113, 113 },{ 144, 144, 144 },{ 104, 104, 104 },{ 66, 66, 66 },{ 73, 73, 73 },
-			{ 63, 63, 63 },{ 58, 58, 58 },{ 71, 71, 71 },{ 122, 122, 122 },{ 154, 154, 154 },{ 106, 106, 106 },{ 70, 70, 70 },{ 69, 69, 69 },
-			{ 67, 67, 67 },{ 61, 61, 61 },{ 68, 68, 68 },{ 104, 104, 104 },{ 126, 126, 126 },{ 88, 88, 88 },{ 68, 68, 68 },{ 70, 70, 70 },
-			{ 79, 79, 79 },{ 65, 65, 65 },{ 60, 60, 60 },{ 70, 70, 70 },{ 77, 77, 77 },{ 68, 68, 68 },{ 58, 58, 58 },{ 75, 75, 75 },
-			{ 85, 85, 85 },{ 71, 71, 71 },{ 64, 64, 64 },{ 59, 59, 59 },{ 55, 55, 55 },{ 61, 61, 61 },{ 65, 65, 65 },{ 83, 83, 83 },
-			{ 87, 87, 87 },{ 79, 79, 79 },{ 69, 69, 69 },{ 68, 68, 68 },{ 65, 65, 65 },{ 76, 76, 76 },{ 78, 78, 78 },{ 94, 94, 94 }
-		};
-
-		Mat_<Vec3i> img_ycbcr(8, 8, imgdata);
-
+		auto img_ycbcr = RGB_to_YCbCr(img);
 
 		auto partitions = Partition(img_ycbcr);
 
@@ -339,7 +376,8 @@ namespace Smecherie
 
 	void JPEGDecompress(char *path)
 	{
-		auto jpegData = ReadJPEG(path);
+		int width, height;
+		auto jpegData = ReadJPEG(path, width, height);
 
 		std::vector<Mat_<Vec3i>> partitions_quantized{};
 		for (auto part : jpegData)
@@ -347,12 +385,27 @@ namespace Smecherie
 			partitions_quantized.push_back(Zigzag2(part));
 		}
 
-		for (auto part : partitions_quantized)
+		auto partitions = Dequantize(partitions_quantized);
+		
+		Mat_<Vec3i> img_ycbcr(width, height);
+		for (int i = 0, k = 0; i < width / 8; ++i)
 		{
-			print(part);
+			for (int j = 0; j < height / 8; ++j, ++k)
+			{
+				for (int _i = 0; _i < 8; ++_i)
+				{
+					for (int _j = 0; _j < 8; ++_j)
+					{
+						img_ycbcr(i * 8 + _i, j * 8 + _j) = partitions[k](_i, _j);
+					}
+				}
+			}
 		}
 
+		auto img = YCbCr_to_RGB(img_ycbcr);
 
+		imshow("doamne apara si pazeste", img);
+		waitKey(0);
 	}
 }
 

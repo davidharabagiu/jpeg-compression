@@ -389,16 +389,16 @@ void testMouseClick()
 	}
 }
 
-//void testJPEGCompress()
-//{
-//	char fname[MAX_PATH];
-//	if (!openFileDlg(fname))
-//		return;
-//	Mat_<Vec3b> img = imread(fname);
-//	Smecherie::JPEGCompress(img, "kkt");
-//}
-
 void testJPEGCompress()
+{
+	char fname[MAX_PATH];
+	if (!openFileDlg(fname))
+		return;
+	Mat_<Vec3b> img = imread(fname);
+	Smecherie::JPEGCompress(img, "kkt");
+}
+
+/*void testJPEGCompress()
 {
 	Vec3b imgdata[64] = {
 		{ 52, 52, 52 },{ 55, 55, 55 }, {61, 61, 61 }, {66, 66, 66 }, {70, 70, 70 }, {61, 61, 61 }, {64, 64, 64 }, {73, 73, 73 },
@@ -414,7 +414,7 @@ void testJPEGCompress()
 	Mat_<Vec3b> img(8, 8, imgdata);
 
 	Smecherie::JPEGCompress(img, "kkt");
-}
+}*/
 
 int main()
 {
