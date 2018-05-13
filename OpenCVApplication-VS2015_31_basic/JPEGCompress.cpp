@@ -130,8 +130,6 @@ namespace Smecherie
 
 	static Mat_<Vec3i> ProcessImg2(const Mat_<Vec3i>& src)
 	{
-		const double alpha0 = 1 / sqrt(2.0);
-
 		Mat_<Vec3i> dst(src.rows, src.cols);
 		double ny, ncb, ncr, ci, cj, cy, ccb, ccr;
 
@@ -295,7 +293,8 @@ namespace Smecherie
 
 	void JPEGCompress(char *src, char *dst)
 	{
-		Mat_<Vec3b> img = imread(src), img_resize;
+		Mat_<Vec3b> img = imread(
+			src), img_resize;
 		resize(img, img_resize, { (int)(std::ceil(img.cols / 8.0) * 8), (int)(std::ceil(img.rows / 8.0) * 8) });
 		auto img_ycbcr = RGB_to_YCbCr(img_resize);
 		auto temp = ProcessImg(img_ycbcr);
