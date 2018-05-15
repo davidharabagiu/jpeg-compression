@@ -32,8 +32,6 @@ namespace Smecherie
 		{ 99, 99, 99, 99, 99, 99, 99, 99 }
 	};
 
-	static const int QUALITY = 32;
-
 	static Mat_<Vec3i> RGB_to_YCbCr(const Mat_<Vec3b>& img_rgb)
 	{
 		Mat_<Vec3i> img_ycbcr(img_rgb.rows, img_rgb.cols);
@@ -46,9 +44,9 @@ namespace Smecherie
 			{
 				old_val = img_rgb(i, j);
 
-				new_val[0] = MIN(255, MAX(0, (0.299 * (int)old_val[2]) + (0.587 * (int)old_val[1]) + (0.114 * (int)old_val[0])));
-				new_val[1] = MIN(255, MAX(0, 128 - (0.168736 * (int)old_val[2]) - (0.331264 * (int)old_val[1]) + (0.5 * (int)old_val[0])));
-				new_val[2] = MIN(255, MAX(0, 128 + (0.5 * (int)old_val[2]) - (0.418688 * (int)old_val[1]) - (0.081312 * (int)old_val[0])));
+				new_val[0] = (int)(MIN(255, MAX(0, (0.299 * (int)old_val[2]) + (0.587 * (int)old_val[1]) + (0.114 * (int)old_val[0]))));
+				new_val[1] = (int)(MIN(255, MAX(0, 128 - (0.168736 * (int)old_val[2]) - (0.331264 * (int)old_val[1]) + (0.5 * (int)old_val[0]))));
+				new_val[2] = (int)(MIN(255, MAX(0, 128 + (0.5 * (int)old_val[2]) - (0.418688 * (int)old_val[1]) - (0.081312 * (int)old_val[0]))));
 
 				img_ycbcr(i, j) = new_val;
 			}
@@ -69,9 +67,9 @@ namespace Smecherie
 			{
 				old_val = img_ycbcr(i, j);
 
-				new_val[2] = MIN(255, MAX(0, old_val[0] + 1.402 * (old_val[2] - 128)));
-				new_val[1] = MIN(255, MAX(0, old_val[0] - 0.344136 * (old_val[1] - 128) - 0.714136 * (old_val[2] - 128)));
-				new_val[0] = MIN(255, MAX(0, old_val[0] + 1.772 * (old_val[1] - 128)));
+				new_val[2] = (uchar)(MIN(255, MAX(0, old_val[0] + 1.402 * (old_val[2] - 128))));
+				new_val[1] = (uchar)(MIN(255, MAX(0, old_val[0] - 0.344136 * (old_val[1] - 128) - 0.714136 * (old_val[2] - 128))));
+				new_val[0] = (uchar)(MIN(255, MAX(0, old_val[0] + 1.772 * (old_val[1] - 128))));
 
 				img_rgb(i, j) = new_val;
 			}
@@ -172,7 +170,7 @@ namespace Smecherie
 		return dst;
 	}
 
-	static std::vector<Vec3i> Zigzag(const Mat_<Vec3i>& src)
+	static std::vector<Vec3i> Zigzag(const Mat_<Vec3i>& src, int quality)
 	{
 		std::vector<Vec2i> zz{};
 
@@ -202,7 +200,7 @@ namespace Smecherie
 		{
 			for (int bc = 0; bc < src.cols; bc += 8)
 			{
-				for (int i = 0; i < QUALITY; ++i)
+				for (int i = 0; i < quality; ++i)
 				{
 					res.push_back(src(br + zz[i][0], bc + zz[i][1]));
 				}
@@ -212,7 +210,7 @@ namespace Smecherie
 		return res;
 	}
 
-	static Mat_<Vec3i> Zigzag2(const std::vector<Vec3i>& src, int rows, int cols)
+	static Mat_<Vec3i> Zigzag2(const std::vector<Vec3i>& src, int rows, int cols, int quality)
 	{
 		std::vector<Vec2i> zz{};
 
@@ -242,7 +240,7 @@ namespace Smecherie
 		{
 			for (int bc = 0; bc < cols; bc += 8)
 			{
-				for (int i = 0; i < QUALITY; ++i, ++k)
+				for (int i = 0; i < quality; ++i, ++k)
 				{
 					res(br + zz[i][0], bc + zz[i][1]) = src[k];
 				}
@@ -252,12 +250,13 @@ namespace Smecherie
 		return res;
 	}
 
-	void WriteJPEG(std::vector<Vec3i> data, int rows, int cols, char *path)
+	void WriteJPEG(std::vector<Vec3i> data, int rows, int cols, char *path, int quality)
 	{
 		std::ofstream fout(path, std::ios::binary);
 
 		fout.write(reinterpret_cast<char *>(&rows), sizeof(rows));
 		fout.write(reinterpret_cast<char *>(&cols), sizeof(cols));
+		fout.write(reinterpret_cast<char *>(&quality), sizeof(quality));
 
 		for (int i = 0; i < data.size(); ++i)
 		{
@@ -268,19 +267,20 @@ namespace Smecherie
 		fout.close();
 	}
 
-	static std::vector<Vec3i> ReadJPEG(char *path, int& rows, int& cols)
+	static std::vector<Vec3i> ReadJPEG(char *path, int& rows, int& cols, int& quality)
 	{
 		std::ifstream fin(path, std::ios::binary);
 
 		fin.read(reinterpret_cast<char *>(&rows), sizeof(rows));
 		fin.read(reinterpret_cast<char *>(&cols), sizeof(cols));
+		fin.read(reinterpret_cast<char *>(&quality), sizeof(quality));
 
 		int partitions = (rows / 8) * (cols / 8);
 		std::vector<Vec3i> data(partitions * 64);
 
 		for (int i = 0, k = 0; i < partitions; ++i)
 		{
-			for (int j = 0; j < QUALITY; ++j, ++k)
+			for (int j = 0; j < quality; ++j, ++k)
 			{
 				Vec3b px;
 				fin.read(reinterpret_cast<char *>(&px), sizeof(px));
@@ -291,22 +291,22 @@ namespace Smecherie
 		return data;
 	}
 
-	void JPEGCompress(char *src, char *dst)
+	void JPEGCompress(char *src, char *dst, int quality)
 	{
-		Mat_<Vec3b> img = imread(
-			src), img_resize;
+		std::cout << quality << std::endl;
+		Mat_<Vec3b> img = imread(src), img_resize;
 		resize(img, img_resize, { (int)(std::ceil(img.cols / 8.0) * 8), (int)(std::ceil(img.rows / 8.0) * 8) });
 		auto img_ycbcr = RGB_to_YCbCr(img_resize);
 		auto temp = ProcessImg(img_ycbcr);
-		auto jpeg_data = Zigzag(temp);
-		WriteJPEG(jpeg_data, temp.rows, temp.cols, dst);
+		auto jpeg_data = Zigzag(temp, quality);
+		WriteJPEG(jpeg_data, temp.rows, temp.cols, dst, quality);
 	}
 
 	void JPEGDecompress(char *src, char *dst)
 	{
-		int rows, cols;
-		auto jpegData = ReadJPEG(src, rows, cols);
-		auto temp = Zigzag2(jpegData, rows, cols);
+		int rows, cols, quality;
+		auto jpegData = ReadJPEG(src, rows, cols, quality);
+		auto temp = Zigzag2(jpegData, rows, cols, quality);
 		auto img_ycbcr = ProcessImg2(temp);
 		auto img = YCbCr_to_RGB(img_ycbcr);
 

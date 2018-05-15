@@ -3,8 +3,8 @@
 // Author: David Harabagiu
 //
 
-#ifndef _JPEGCompress_H_
-#define _JPEGCompress_H_
+#ifndef _JPEGCompress_H
+#define _JPEGCompress_H
 
 #include "common.h"
 #include <vector>
@@ -12,7 +12,7 @@
 
 namespace Smecherie
 {
-	void JPEGCompress(char *src, char *dst);
+	void JPEGCompress(char *src, char *dst, int quality = 32);
 	void JPEGDecompress(char *src, char *dst);
 }
 
